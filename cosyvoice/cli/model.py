@@ -279,26 +279,12 @@ class CosyVoice2Model(CosyVoiceModel):
         self.flow.encoder = flow_encoder
 
     def load_vllm(self, model_dir):
-        export_cosyvoice2_vllm(self.llm, model_dir, self.device)
-        # Force vLLM to use CPU platform when running on NPU.
-        # vLLM's built-in platform detection only recognizes CUDA/ROCm/TPU/XPU,
-        # and the standard PyPI build doesn't include NPU (vllm-ascend) support.
-        # Without this, platform falls through to UnspecifiedPlatform with
-        # device_type="" causing "Device string must not be empty".
-        import vllm.platforms
-        from vllm.platforms.cpu import CpuPlatform
-        vllm.platforms.current_platform = CpuPlatform()
-        # Register the CosyVoice2 model architecture so vLLM recognizes it
-        from vllm import EngineArgs, LLMEngine, ModelRegistry
-        from cosyvoice.vllm.cosyvoice2 import CosyVoice2ForCausalLM
-        ModelRegistry.register_model("CosyVoice2ForCausalLM", CosyVoice2ForCausalLM)
-        engine_args = EngineArgs(model=model_dir,
-                                 skip_tokenizer_init=True,
-                                 enable_prompt_embeds=True,
-                                 gpu_memory_utilization=0.2)
-        self.llm.vllm = LLMEngine.from_engine_args(engine_args)
-        self.llm.lock = threading.Lock()
-        del self.llm.llm.model.model.layers
+        # vLLM is not available in this environment (torch 2.10 + NPU).
+        # Bypass vLLM and use direct PyTorch inference instead.
+        # The inference code path checks hasattr(self.llm, 'vllm') and
+        # falls back to self.llm.inference() / self.llm.inference_bistream()
+        # when the vllm attribute is absent.
+        pass
 
     def token2wav(self, token, prompt_token, prompt_feat, embedding, token_offset, uuid, stream=False, finalize=False, speed=1.0):
         with torch.cuda.amp.autocast(self.fp16):
