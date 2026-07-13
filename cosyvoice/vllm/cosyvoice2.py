@@ -82,6 +82,9 @@ class CosyVoice2ForCausalLM(nn.Module, SupportsLoRA, SupportsPP):
     def get_input_embeddings(self, input_ids: torch.Tensor) -> torch.Tensor:
         return self.model.get_input_embeddings(input_ids)
 
+    def embed_input_ids(self, input_ids: torch.Tensor) -> torch.Tensor:
+        return self.model.embed_input_ids(input_ids)
+
     def forward(
         self,
         input_ids: torch.Tensor,
@@ -96,14 +99,9 @@ class CosyVoice2ForCausalLM(nn.Module, SupportsLoRA, SupportsPP):
     def compute_logits(
         self,
         hidden_states: torch.Tensor,
-        sampling_metadata: Optional[SamplingMetadata] = None,
     ) -> Optional[torch.Tensor]:
-        if VLLM_V1_ENGINE_ONLY:
-            logits = self.logits_processor(self.lm_head, hidden_states,
-                                           self.lm_head.bias)
-        else:
-            logits = self.logits_processor(self.lm_head, hidden_states,
-                                           sampling_metadata, self.lm_head.bias)
+        logits = self.logits_processor(self.lm_head, hidden_states,
+                                       self.lm_head.bias)
         return logits
 
     def load_weights(self, weights: Iterable[tuple[str,

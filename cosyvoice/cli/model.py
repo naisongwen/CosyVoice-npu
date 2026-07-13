@@ -288,7 +288,10 @@ class CosyVoice2Model(CosyVoiceModel):
         import vllm.platforms
         from vllm.platforms.cpu import CpuPlatform
         vllm.platforms.current_platform = CpuPlatform()
-        from vllm import EngineArgs, LLMEngine
+        # Register the CosyVoice2 model architecture so vLLM recognizes it
+        from vllm import EngineArgs, LLMEngine, ModelRegistry
+        from cosyvoice.vllm.cosyvoice2 import CosyVoice2ForCausalLM
+        ModelRegistry.register_model("CosyVoice2ForCausalLM", CosyVoice2ForCausalLM)
         engine_args = EngineArgs(model=model_dir,
                                  skip_tokenizer_init=True,
                                  enable_prompt_embeds=True,
