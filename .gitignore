@@ -1,0 +1,7 @@
+vllm-fun-cosyvoice3-0.5B-v1.tar.gz
+*.so
+__pycache__
+*.pyc
+.idea/
+.vscode/
+pretrained_models/

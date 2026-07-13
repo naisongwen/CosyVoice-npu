@@ -1,0 +1,36 @@
+diff --git a/cosyvoice/cli/model.py b/cosyvoice/cli/model.py
+index 92a15d9..195335a 100644
+--- a/cosyvoice/cli/model.py
++++ b/cosyvoice/cli/model.py
+@@ -100,7 +100,7 @@ class CosyVoiceModel:
+ 
+     def llm_job(self, text, prompt_text, llm_prompt_speech_token, llm_embedding, uuid):
+         cur_silent_token_num, max_silent_token_num = 0, 5
+-        with self.llm_context, torch.cuda.amp.autocast(self.fp16 is True and hasattr(self.llm, 'vllm') is False):
++        with torch.cuda.amp.autocast(self.fp16 is True and hasattr(self.llm, 'vllm') is False):
+             if isinstance(text, Generator):
+                 assert (self.__class__.__name__ != 'CosyVoiceModel') and not hasattr(self.llm, 'vllm'), 'streaming input text is only implemented for CosyVoice2/3 and do not support vllm!'
+                 token_generator = self.llm.inference_bistream(text=text,
+@@ -284,7 +284,8 @@ class CosyVoice2Model(CosyVoiceModel):
+         engine_args = EngineArgs(model=model_dir,
+                                  skip_tokenizer_init=True,
+                                  enable_prompt_embeds=True,
+-                                 gpu_memory_utilization=0.2)
++                                 gpu_memory_utilization=0.95,
++                                 compilation_config={"cudagraph_mode": "FULL_DECODE_ONLY"})
+         self.llm.vllm = LLMEngine.from_engine_args(engine_args)
+         self.llm.lock = threading.Lock()
+         del self.llm.llm.model.model.layers
+diff --git a/cosyvoice/vllm/cosyvoice2.py b/cosyvoice/vllm/cosyvoice2.py
+index 4d87123..b416092 100644
+--- a/cosyvoice/vllm/cosyvoice2.py
++++ b/cosyvoice/vllm/cosyvoice2.py
+@@ -26,7 +26,7 @@
+ from typing import Optional
+ from packaging.version import parse as vparse
+ import vllm
+-
++from typing import Union
+ # vLLM-0.11.0+ only support V1 engine
+ VLLM_V1_ENGINE_ONLY: bool = vparse(vllm.__version__) >= vparse("0.11.0")
+ if VLLM_V1_ENGINE_ONLY:
