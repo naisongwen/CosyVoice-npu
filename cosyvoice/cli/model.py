@@ -280,6 +280,14 @@ class CosyVoice2Model(CosyVoiceModel):
 
     def load_vllm(self, model_dir):
         export_cosyvoice2_vllm(self.llm, model_dir, self.device)
+        # Force vLLM to use CPU platform when running on NPU.
+        # vLLM's built-in platform detection only recognizes CUDA/ROCm/TPU/XPU,
+        # and the standard PyPI build doesn't include NPU (vllm-ascend) support.
+        # Without this, platform falls through to UnspecifiedPlatform with
+        # device_type="" causing "Device string must not be empty".
+        import vllm.platforms
+        from vllm.platforms.cpu import CpuPlatform
+        vllm.platforms.current_platform = CpuPlatform()
         from vllm import EngineArgs, LLMEngine
         engine_args = EngineArgs(model=model_dir,
                                  skip_tokenizer_init=True,
