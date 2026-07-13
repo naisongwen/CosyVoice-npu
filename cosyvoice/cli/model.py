@@ -279,12 +279,15 @@ class CosyVoice2Model(CosyVoiceModel):
         self.flow.encoder = flow_encoder
 
     def load_vllm(self, model_dir):
-        # vLLM is not available in this environment (torch 2.10 + NPU).
-        # Bypass vLLM and use direct PyTorch inference instead.
-        # The inference code path checks hasattr(self.llm, 'vllm') and
-        # falls back to self.llm.inference() / self.llm.inference_bistream()
-        # when the vllm attribute is absent.
-        pass
+        export_cosyvoice2_vllm(self.llm, model_dir, self.device)
+        from vllm import EngineArgs, LLMEngine
+        engine_args = EngineArgs(model=model_dir,
+                                 skip_tokenizer_init=True,
+                                 enable_prompt_embeds=True,
+                                 gpu_memory_utilization=0.2)
+        self.llm.vllm = LLMEngine.from_engine_args(engine_args)
+        self.llm.lock = threading.Lock()
+        del self.llm.llm.model.model.layers
 
     def token2wav(self, token, prompt_token, prompt_feat, embedding, token_offset, uuid, stream=False, finalize=False, speed=1.0):
         with torch.cuda.amp.autocast(self.fp16):
