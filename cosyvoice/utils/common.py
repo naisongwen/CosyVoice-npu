@@ -137,7 +137,8 @@ def init_weights(m, mean=0.0, std=0.01):
 # Repetition Aware Sampling in VALL-E 2
 def ras_sampling(weighted_scores, decoded_tokens, sampling, top_p=0.8, top_k=25, win_size=10, tau_r=0.1):
     top_ids = nucleus_sampling(weighted_scores, top_p=top_p, top_k=top_k)
-    rep_num = (torch.tensor(decoded_tokens[-win_size:]).to(weighted_scores.device) == top_ids).sum().item()
+    # rep_num computed on CPU to avoid device sync
+    rep_num = sum(1 for t in decoded_tokens[-win_size:] if t == top_ids)
     if rep_num >= win_size * tau_r:
         weighted_scores[top_ids] = -float('inf')
         top_ids = random_sampling(weighted_scores, decoded_tokens, sampling)
@@ -145,20 +146,19 @@ def ras_sampling(weighted_scores, decoded_tokens, sampling, top_p=0.8, top_k=25,
 
 
 def nucleus_sampling(weighted_scores, top_p=0.8, top_k=25):
-    prob, indices = [], []
-    cum_prob = 0.0
-    sorted_value, sorted_idx = weighted_scores.softmax(dim=0).sort(descending=True, stable=True)
-    for i in range(len(sorted_idx)):
-        # sampling both top-p and numbers.
-        if cum_prob < top_p and len(prob) < top_k:
-            cum_prob += sorted_value[i]
-            prob.append(sorted_value[i])
-            indices.append(sorted_idx[i])
-        else:
-            break
-    prob = torch.tensor(prob).to(weighted_scores)
-    indices = torch.tensor(indices, dtype=torch.long).to(weighted_scores.device)
-    top_ids = indices[prob.multinomial(1, replacement=True)].item()
+    """Optimized: vectorized top-p/top-k, no per-element CPU sync."""
+    device = weighted_scores.device
+    probs = weighted_scores.softmax(dim=0)
+    sorted_probs, sorted_idx = probs.sort(descending=True, stable=True)
+    cumsum = sorted_probs.cumsum(dim=0)
+    mask = (cumsum <= top_p) & (torch.arange(len(sorted_probs), device=device) < top_k)
+    # Include the first element that exceeds top_p (to reach >top_p cumulative prob)
+    first_over_idx = mask.sum()
+    if first_over_idx < len(mask):
+        mask[first_over_idx] = True
+    masked_probs = sorted_probs * mask.float()
+    masked_probs = masked_probs / masked_probs.sum()
+    top_ids = sorted_idx[masked_probs.multinomial(1, replacement=True)].item()
     return top_ids
 
 

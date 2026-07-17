@@ -508,7 +508,7 @@ class Qwen2LM(TransformerLM):
             sampling_params = SamplingParams(top_k=sampling,
                                              stop_token_ids=self.stop_token_ids,
                                              min_tokens=min_len,
-                                             max_tokens=max_len)
+                                             max_tokens=max(max_len, 1))
             with self.lock:
                 self.vllm.add_request(uuid, {"prompt_embeds": lm_input.squeeze(0).to(torch.bfloat16).to(lm_input.device)}, sampling_params)
                 self.vllm_output_queue[uuid] = queue.Queue()

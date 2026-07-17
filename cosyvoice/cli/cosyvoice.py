@@ -226,6 +226,11 @@ class CosyVoice3(CosyVoice2):
         self.model.load('{}/llm.pt'.format(model_dir),
                         '{}/flow.pt'.format(model_dir),
                         '{}/hift.pt'.format(model_dir))
+        # Auto-load flow encoder JIT when available (accelerates mel generation)
+        flow_encoder_jit = '{}/flow.encoder.{}.zip'.format(model_dir, 'fp16' if self.fp16 else 'fp32')
+        if os.path.exists(flow_encoder_jit):
+            self.model.load_jit(flow_encoder_jit)
+            logging.info('loaded flow encoder JIT: {}'.format(flow_encoder_jit))
         if load_vllm:
             self.model.load_vllm('{}/vllm'.format(model_dir))
         if load_trt:
