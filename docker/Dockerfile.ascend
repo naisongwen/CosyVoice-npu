@@ -1,0 +1,40 @@
+# CosyVoice3 Ascend NPU Docker Image
+# Base: vllm-ascend v0.18.0 with pre-built NPU backend
+# Achieves RTF ~0.68 (1.5x realtime) on Ascend 910B4
+FROM quay.io/ascend/vllm-ascend:v0.18.0
+
+WORKDIR /workspace
+ENV HF_ENDPOINT=https://hf-mirror.com
+ENV PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
+
+# Install CosyVoice Python dependencies (no git clone — code mounted at runtime)
+RUN pip install --no-cache-dir \
+    hyperpyyaml soundfile wget wetext pyworld \
+    inflect hydra-core ruamel.yaml pyarrow \
+    omegaconf gdown onnxruntime \
+    x-transformers matplotlib openai-whisper conformer \
+    diffusers lightning 2>&1 | tail -3
+
+# vLLM plugin: registers CosyVoice2ForCausalLM with ModelRegistry
+COPY cosyvoice_vllm_plugin.py /opt/cosyvoice_vllm_plugin.py
+COPY cosyvoice_vllm_plugin_entrypoints.txt /tmp/entry_points.txt
+RUN mkdir -p /usr/local/python3.11.14/lib/python3.11/site-packages/cosyvoice_vllm_plugin-0.1.0.dist-info && \
+    cp /opt/cosyvoice_vllm_plugin.py /usr/local/python3.11.14/lib/python3.11/site-packages/ && \
+    cp /tmp/entry_points.txt /usr/local/python3.11.14/lib/python3.11/site-packages/cosyvoice_vllm_plugin-0.1.0.dist-info/entry_points.txt && \
+    echo -e "Metadata-Version: 2.1\nName: cosyvoice-vllm-plugin\nVersion: 0.1.0" > /usr/local/python3.11.14/lib/python3.11/site-packages/cosyvoice_vllm_plugin-0.1.0.dist-info/METADATA
+
+# CANN environment setup
+COPY ascend_entrypoint.sh /opt/ascend_entrypoint.sh
+RUN chmod +x /opt/ascend_entrypoint.sh
+
+# Server script
+COPY cosyvoice3_server.py /opt/cosyvoice3_server.py
+
+VOLUME /models/CosyVoice3
+EXPOSE 58099
+
+ENV VLLM_WORKER_MULTIPROC_METHOD=spawn
+ENV COSYVOICE_ROOT=/workspace/CosyVoice
+
+ENTRYPOINT ["/bin/bash", "/opt/ascend_entrypoint.sh"]
+CMD ["python3", "-u", "/opt/cosyvoice3_server.py", "--port", "58099", "--model_dir", "/models/CosyVoice3", "--load_vllm"]
